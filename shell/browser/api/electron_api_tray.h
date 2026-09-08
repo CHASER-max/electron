@@ -17,6 +17,7 @@
 #include "shell/browser/ui/tray_icon_observer.h"
 #include "shell/common/gin_helper/constructible.h"
 #include "shell/common/gin_helper/self_keep_alive.h"
+#include "v8/include/cppgc/member.h"
 
 namespace gfx {
 class Image;
@@ -111,6 +112,9 @@ class Tray final : public gin::Wrappable<Tray>,
   bool CheckAlive();
 
   cppgc::Member<Menu> menu_;
+  // The menu passed to the last popUpContextMenu() call. Showing it may be
+  // asynchronous, so keep it alive rather than relying on the caller to.
+  cppgc::Member<Menu> popup_menu_;
   std::optional<base::Uuid> guid_;
   std::unique_ptr<TrayIcon> tray_icon_;
   gin_helper::SelfKeepAlive<Tray> keep_alive_{this};

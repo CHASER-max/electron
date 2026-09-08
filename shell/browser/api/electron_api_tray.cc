@@ -88,7 +88,8 @@ Tray* Tray::New(gin_helper::ErrorThrower thrower,
   Tray* tray = cppgc::MakeGarbageCollected<Tray>(
       isolate->GetCppHeap()->GetAllocationHandle(), isolate, image, guid);
   if (try_catch.HasCaught()) {
-    tray->keep_alive_.Clear();
+    // Remove the already-created OS icon now, not at eventual collection.
+    tray->Destroy();
     try_catch.ReThrow();
     return {};
   }
@@ -190,6 +191,7 @@ void Tray::OnDragEnded() {
 
 void Tray::Destroy() {
   menu_.Clear();
+  popup_menu_.Clear();
   tray_icon_.reset();
   keep_alive_.Clear();
 }
@@ -327,6 +329,8 @@ void Tray::DisplayBalloon(gin_helper::ErrorThrower thrower,
 #endif
   }
 
+  if (!CheckAlive())
+    return;
   tray_icon_->DisplayBalloon(balloon_options);
 }
 
@@ -363,6 +367,10 @@ void Tray::PopUpContextMenu(gin::Arguments* args) {
     }
   }
 
+  // Converting the arguments can run JS that destroys the tray.
+  if (!CheckAlive())
+    return;
+  popup_menu_ = menu;
   tray_icon_->PopUpContextMenu(pos,
                                menu ? menu->model()->GetWeakPtr() : nullptr);
 }
@@ -444,6 +452,7 @@ void Tray::FillObjectTemplate(v8::Isolate* isolate,
 void Tray::Trace(cppgc::Visitor* visitor) const {
   gin::Wrappable<Tray>::Trace(visitor);
   visitor->Trace(menu_);
+  visitor->Trace(popup_menu_);
 }
 
 const gin::WrapperInfo* Tray::wrapper_info() const {
