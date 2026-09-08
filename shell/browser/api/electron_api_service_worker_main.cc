@@ -102,10 +102,16 @@ ServiceWorkerMain::~ServiceWorkerMain() {
 }
 
 void ServiceWorkerMain::Destroy() {
+  if (version_destroyed_)
+    return;
   version_destroyed_ = true;
   InvalidateVersionInfo();
   MaybeDisconnectRemote();
-  GetVersionIdMap().erase(key_);
+  // A newer instance may have registered under |key_| since; only drop ours.
+  auto& map = GetVersionIdMap();
+  auto it = map.find(key_);
+  if (it != map.end() && (!it->second || it->second.Get() == this))
+    map.erase(it);
   keep_alive_.Clear();
 }
 
@@ -181,6 +187,14 @@ void ServiceWorkerMain::OnVersionRedundant() {
   // ServiceWorkerMain will need to be created.
   // Set internal state to mark it for deletion once it has fully stopped.
   redundant_ = true;
+
+  // content only broadcasts OnStopped for versions that reached RUNNING;
+  // anything else gets no further running status change, so destroy now.
+  auto* version = GetLiveVersion(service_worker_context_, version_id_);
+  if (!version ||
+      version->running_status() != blink::EmbeddedWorkerStatus::kRunning) {
+    Destroy();
+  }
 }
 
 bool ServiceWorkerMain::IsDestroyed() const {
